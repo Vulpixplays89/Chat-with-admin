@@ -78,37 +78,6 @@ def send_welcome(message):
 
     bot.send_message(user_id, welcome_text, reply_markup=markup, parse_mode="Markdown")
 
-@bot.message_handler(func=lambda message: message.chat.id != ADMIN_ID)
-def forward_to_admin(message):
-    """Forwards user messages to the admin unless they are blocked."""
-    user_id = message.chat.id
-
-    if is_user_blocked(user_id):
-        bot.send_message(user_id, "🚫 You are blocked by the admin.")
-        return
-
-    forwarded_message = bot.forward_message(ADMIN_ID, user_id, message.message_id)
-    message_mapping[forwarded_message.message_id] = user_id  # Store original sender's chat ID
-
-@bot.message_handler(func=lambda message: message.chat.id == ADMIN_ID and message.reply_to_message)
-def reply_to_user(message):
-    """Replies to the original user when the admin replies to a forwarded message."""
-    original_message_id = message.reply_to_message.message_id
-    if original_message_id in message_mapping:
-        user_id = message_mapping[original_message_id]
-        bot.send_message(user_id, f"💬 *Admin:* {message.text}", parse_mode="Markdown")
-        bot.send_message(ADMIN_ID, "✅ Message sent successfully!")
-    else:
-        bot.send_message(ADMIN_ID, "⚠️ Error: Could not find the original sender.")
-
-def is_user_blocked(user_id):
-    """Checks if the user is blocked."""
-    return blocked_collection.find_one({"user_id": user_id}) is not None
-
-
-
-
-
 @bot.message_handler(commands=["block"])
 def block_user(message):
     """Blocks a user by user ID."""
@@ -138,6 +107,8 @@ def unblock_user(message):
                 bot.send_message(ADMIN_ID, "⚠️ This user is not blocked.")
         except (IndexError, ValueError):
             bot.send_message(ADMIN_ID, "⚠️ Usage: `/unblock user_id`", parse_mode="Markdown")
+
+
 @bot.message_handler(commands=["users"])
 def list_users(message):
     """Lists all saved users with numbering."""
@@ -148,12 +119,6 @@ def list_users(message):
             bot.send_message(ADMIN_ID, f"👥 *Saved Users:*\n{user_list}", parse_mode="Markdown")
         else:
             bot.send_message(ADMIN_ID, "⚠️ No users found in the database.")
-
-
-
-
-
-
 
 @bot.message_handler(commands=["broadcast"])
 def broadcast_message(message):
@@ -170,6 +135,129 @@ def broadcast_message(message):
             bot.send_message(ADMIN_ID, "✅ Broadcast sent successfully!")
         except IndexError:
             bot.send_message(ADMIN_ID, "⚠️ Usage: /broadcast Your message here.")
+
+@bot.message_handler(content_types=["photo", "video", "audio", "voice", "document", "sticker", "animation"])
+def forward_media_to_admin(message):
+    """Forwards any media sent by users to the admin."""
+    if message.chat.id == ADMIN_ID:
+        return  # Ignore admin's media
+
+    try:
+        forwarded_message = bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
+        bot.send_message(ADMIN_ID, f"📩 *New Media from* `{message.chat.id}`", parse_mode="Markdown",
+                         reply_to_message_id=forwarded_message.message_id)
+    except Exception as e:
+        print(f"⚠️ Failed to forward media from {message.chat.id}: {e}")
+
+@bot.message_handler(func=lambda message: message.chat.id == ADMIN_ID and message.reply_to_message)
+def reply_to_user_media(message):
+    """Allows the admin to reply to a forwarded media message."""
+    original_message_id = message.reply_to_message.message_id
+    user_id = message.reply_to_message.forward_from.id if message.reply_to_message.forward_from else None
+
+    if not user_id:
+        bot.send_message(ADMIN_ID, "⚠️ Cannot detect the original sender.")
+        return
+
+    bot.send_message(user_id, f"💬 *Admin:* {message.text}", parse_mode="Markdown")
+    bot.send_message(ADMIN_ID, "✅ Reply sent to the user!")
+
+
+
+
+
+
+###############################################
+
+
+
+
+@bot.message_handler(func=lambda message: message.chat.id != ADMIN_ID)
+def forward_to_admin(message):
+    """Forwards user messages to the admin unless they are blocked."""
+    user_id = message.chat.id
+
+    if is_user_blocked(user_id):
+        bot.send_message(user_id, "🚫 You are blocked by the admin.")
+        return
+
+    forwarded_message = bot.forward_message(ADMIN_ID, user_id, message.message_id)
+    message_mapping[forwarded_message.message_id] = user_id  # Store original sender's chat ID
+
+@bot.message_handler(func=lambda message: message.chat.id == ADMIN_ID and message.reply_to_message)
+def reply_to_user(message):
+    """Replies to the original user when the admin replies to a forwarded message."""
+    original_message_id = message.reply_to_message.message_id
+    if original_message_id in message_mapping:
+        user_id = message_mapping[original_message_id]
+        bot.send_message(user_id, f"💬 *Admin:* {message.text}", parse_mode="Markdown")
+        bot.send_message(ADMIN_ID, "✅ Message sent successfully!")
+    else:
+        bot.send_message(ADMIN_ID, "⚠️ Error: Could not find the original sender.")
+
+def is_user_blocked(user_id):
+    """Checks if the user is blocked."""
+    return blocked_collection.find_one({"user_id": user_id}) is not None
+
+
+# Dictionary to store the user ID for sending files
+pending_user = {}
+
+@bot.message_handler(commands=["send"])
+def ask_for_media(message):
+    """Handles /send <userid> command and waits for the admin to send a file."""
+    if message.chat.id == ADMIN_ID:
+        try:
+            user_id = int(message.text.split()[1])
+            pending_user[ADMIN_ID] = user_id  # Store the user ID
+            bot.send_message(ADMIN_ID, f"📩 Send the file/message you want to send to *{user_id}*.")
+        except (IndexError, ValueError):
+            bot.send_message(ADMIN_ID, "⚠️ Usage: `/send user_id`", parse_mode="Markdown")
+@bot.message_handler(content_types=['text', 'photo', 'audio', 'voice', 'video', 'document', 'sticker'])
+def send_media_to_user(message):
+    """Sends the received file, image, or message to the user."""
+    if ADMIN_ID not in pending_user:
+        return  # Ignore messages if no user is pending
+
+    user_id = pending_user[ADMIN_ID]  # Get the target user ID
+
+    try:
+        if message.text:
+            bot.send_message(user_id, f"💬 *Admin:* {message.text}", parse_mode="Markdown")
+        elif message.photo:
+            bot.send_photo(user_id, message.photo[-1].file_id, caption=message.caption or "📷 Sent by Admin")
+        elif message.audio:
+            bot.send_audio(user_id, message.audio.file_id, caption=message.caption or "🎵 Sent by Admin")
+        elif message.voice:
+            bot.send_voice(user_id, message.voice.file_id, caption=message.caption or "🔊 Sent by Admin")
+        elif message.video:
+            bot.send_video(user_id, message.video.file_id, caption=message.caption or "📹 Sent by Admin")
+        elif message.document:
+            bot.send_document(user_id, message.document.file_id, caption=message.caption or "📄 Sent by Admin")
+        elif message.sticker:
+            bot.send_sticker(user_id, message.sticker.file_id)
+        else:
+            bot.send_message(ADMIN_ID, "⚠️ Unsupported message type.")
+
+        bot.send_message(ADMIN_ID, f"✅ Message/file successfully sent to {user_id}!")
+    
+    except Exception as e:
+        bot.send_message(ADMIN_ID, f"⚠️ Error sending message: {e}")
+
+    del pending_user[ADMIN_ID]  # Clear pending request after sending
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 keep_alive()
 
