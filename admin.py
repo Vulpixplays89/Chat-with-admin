@@ -7,7 +7,7 @@ from threading import Thread
 from flask import Flask 
 
 # Replace with your credentials
-BOT_TOKEN = "7570571248:AAGmr1VUUT9J6AmTfrC44Ig3ZV55lcLA3uI"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 6897739611
 
 MONGO_URI = "mongodb+srv://botplays:botplays@botplays.0xflp.mongodb.net/?retryWrites=true&w=majority&appName=Botplays"
@@ -68,7 +68,7 @@ def send_welcome(message):
         "👋 *Welcome to the Bot!* 🎉\n\n"
         "🚀 This bot allows you to send messages to the admin even if you are restricted.\n"
         "💬 Just send your message here, and it will be forwarded!\n\n"
-        "🔹 *Developer:* [@botplays90](https://t.me/botplays90)\n"
+        "🔹 *Developer:* [Ｂｏｔｐｌａｙｓ](https://t.me/botplays90)\n"
         "🔹 *Join:* [Hyponet](https://t.me/join_hyponet)\n"
     )
 
