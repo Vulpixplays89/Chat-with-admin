@@ -10,7 +10,7 @@ from flask import Flask
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 6897739611
 
-MONGO_URI = "mongodb+srv://botplays:botplays@botplays.0xflp.mongodb.net/?retryWrites=true&w=majority&appName=Botplays"
+MONGO_URI = os.getenv("DB_URL")
 DB_NAME = "telegram_bot"
 USERS_COLLECTION = "users"
 BLOCKED_COLLECTION = "blocked_users"
