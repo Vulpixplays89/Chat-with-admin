@@ -232,10 +232,4 @@ def broadcast_message(message):
 
 keep_alive()
 
-while True:
-    try:
-        print("🚀 Bot is running...")
-        bot.polling(none_stop=True, interval=3, timeout=30)
-    except Exception as e:
-        print(f"⚠️ Bot crashed due to: {e}")
-        time.sleep(5)  # Wait 5 seconds before restarting
+bot.infinity_polling()
