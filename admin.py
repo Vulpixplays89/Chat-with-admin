@@ -70,7 +70,7 @@ def send_welcome(message):
         "🚀 This bot allows you to send messages to the admin even if you are restricted.\n"
         "💬 Just send your message here, and it will be forwarded!\n\n"
         "🔹 *Developer:* [Ｂｏｔｐｌａｙｓ](https://t.me/botplays90)\n"
-        "🔹 *Join:* [Hyponet](https://t.me/join_hyponet)\n"
+        "🔹 *Join:* [Hyponet](https://t.me/hyponet_remastered)\n"
     )
 
     # Create inline buttons
