@@ -4,6 +4,9 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pymongo import MongoClient
 from pyrogram.enums import ParseMode
+from pyrogram.types import InlineQueryResultArticle, InputTextMessageContent, CallbackQuery
+import uuid
+
 from threading import Thread
 from flask import Flask
 
@@ -25,6 +28,10 @@ db = client[DB_NAME]
 users_collection = db["users"]
 blocked_collection = db["blocked_users"]
 message_mapping_collection = db["message_mappings"]
+
+selected_users = {}
+
+
 
 # Flask app for keep-alive
 flask_app = Flask(__name__)
@@ -188,6 +195,75 @@ async def broadcast(client, message: Message):
         await message.reply(f"✅ Broadcast sent to {count} users.")
     except IndexError:
         await message.reply("⚠️ Usage: /broadcast Your message here.")
+
+@app.on_inline_query()
+async def inline_query_handler(client, inline_query):
+    if inline_query.from_user.id != ADMIN_ID:
+        return
+
+    query = inline_query.query.strip().lower()
+    results = []
+
+    if not query:
+        return await inline_query.answer(results=[], cache_time=1)
+
+    users = users_collection.find({
+        "$or": [
+            {"username": {"$regex": query, "$options": "i"}},
+            {"user_id": {"$regex": query if query.isdigit() else "000000000"}}
+        ]
+    }).limit(20)
+
+    for user in users:
+        uid = user['user_id']
+        uname = user.get("username", "No username")
+        results.append(
+            InlineQueryResultArticle(
+                title=f"{uname} ({uid})",
+                input_message_content=InputTextMessageContent(
+                    message_text=f"User selected: <code>{uid}</code>",
+                    parse_mode=ParseMode.HTML
+                ),
+                description=f"Click to message {uname}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💬 Send Message", callback_data=f"sendmsg_{uid}")]
+                ]),
+                id=str(uuid.uuid4())
+            )
+        )
+
+    await inline_query.answer(results, cache_time=0)
+
+@app.on_callback_query(filters.regex("^sendmsg_"))
+async def handle_sendmsg_callback(client, callback_query: CallbackQuery):
+    user_id = int(callback_query.data.split("_")[1])
+    selected_users[callback_query.from_user.id] = user_id
+
+    # Send instruction message to admin
+    await client.send_message(
+        chat_id=callback_query.from_user.id,
+        text=f"✉️ Now send the message you want to deliver to <code>{user_id}</code>",
+        parse_mode=ParseMode.HTML
+    )
+
+    await callback_query.answer("User selected ✅")
+
+
+@app.on_message(filters.private & filters.user(ADMIN_ID))
+async def admin_send_to_selected_user(client, message: Message):
+    if message.reply_to_message:  # keep existing reply logic
+        return
+
+    user_id = selected_users.get(message.from_user.id)
+    if user_id:
+        try:
+            await message.copy(user_id)
+            await message.reply(f"✅ Message sent to <code>{user_id}</code>.", parse_mode=ParseMode.HTML)
+            del selected_users[message.from_user.id]
+        except Exception as e:
+            await message.reply("❌ Failed to send message.")
+            print(e)
+
 
 # Run
 keep_alive()
